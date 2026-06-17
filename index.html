@@ -1,1 +1,154 @@
 
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dodge: Tempestade</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        canvas {
+            background-color: #111;
+            border: 3px solid #444;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        #info {
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        h1 { margin: 0 0 5px 0; font-size: 24px; }
+        p { margin: 0; font-size: 14px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div id="info">
+        <h1>Sobreviva à Tempestade</h1>
+        <p>Use as setas ESQUERDA e DIREITA para desviar da chuva.</p>
+    </div>
+    
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Variáveis do Jogo
+        let score = 0;
+        let gameOver = false;
+        let frameCount = 0;
+        let isThundering = false;
+        let thunderFlash = 0;
+
+        // Jogador
+        const player = {
+            x: 175,
+            y: 530,
+            width: 30,
+            height: 30,
+            speed: 5,
+            dx: 0
+        };
+
+        // Arrays de obstáculos
+        let raindrops = [];
+        let lightnings = [];
+
+        // Controles
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') player.dx = -player.speed;
+            if (e.key === 'ArrowRight') player.dx = player.speed;
+            if (e.key === 'Enter' && gameOver) resetGame();
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' && player.dx < 0) player.dx = 0;
+            if (e.key === 'ArrowRight' && player.dx > 0) player.dx = 0;
+        });
+
+        // Função para criar chuva
+        function createRaindrop() {
+            let speedMultiplier = isThundering ? 1.5 : 1;
+            raindrops.push({
+                x: Math.random() * (canvas.width - 5),
+                y: -10,
+                width: 4,
+                height: 15,
+                speed: (Math.random() * 3 + 3) * speedMultiplier
+            });
+        }
+
+        // Função para criar um raio que cai (obstáculo perigoso)
+        function createLightningObstacle() {
+            lightnings.push({
+                x: Math.random() * (canvas.width - 20),
+                y: -50,
+                width: 20,
+                height: 80,
+                speed: 10
+            });
+        }
+
+        // Função de detecção de colisão
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        function resetGame() {
+            score = 0;
+            gameOver = false;
+            raindrops = [];
+            lightnings = [];
+            player.x = 175;
+            frameCount = 0;
+            isThundering = false;
+            update();
+        }
+
+        function update() {
+            if (gameOver) return;
+
+            frameCount++;
+            score += 1;
+
+            // Fase da Tempestade (Trovões começam após a pontuação 1500)
+            if (score > 1500) {
+                isThundering = true;
+            }
+
+            // Movimento do jogador
+            player.x += player.dx;
+            
+            // Limites da tela
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+            // Adicionar chuva
+            let rainFrequency = isThundering ? 10 : 20;
+            if (frameCount % rainFrequency === 0) {
+                createRaindrop();
+            }
+
+            // Efeitos de Trovão e Raios
+            if (isThundering) {
+                if (Math.random() < 0.005) { // Chance de um clarão de trovão
+                    thunderFlash = 5; // Duração do clarão
+                    if (Math.random() < 0.5) {
+                        createLightningObstacle(); // Cria um raio mortal que cai rápido
+                    }
+                }
