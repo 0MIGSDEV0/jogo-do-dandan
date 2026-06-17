@@ -1,154 +1,228 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dodge: Tempestade</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #222;
-            color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
-        }
-        canvas {
-            background-color: #111;
-            border: 3px solid #444;
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
-        }
-        #info {
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        h1 { margin: 0 0 5px 0; font-size: 24px; }
-        p { margin: 0; font-size: 14px; color: #aaa; }
-    </style>
+<meta charset="UTF-8">
+<title>Dodge da Chuva ⛈️</title>
+<style>
+    body {
+        margin: 0;
+        background: #0a0a1f;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: Arial, sans-serif;
+        overflow: hidden;
+    }
+    canvas {
+        border: 3px solid #555;
+        image-rendering: pixelated;
+    }
+    #gameOver {
+        position: absolute;
+        color: white;
+        font-size: 50px;
+        display: none;
+        text-align: center;
+    }
+    #score {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        font-size: 24px;
+    }
+</style>
 </head>
 <body>
 
-    <div id="info">
-        <h1>Sobreviva à Tempestade</h1>
-        <p>Use as setas ESQUERDA e DIREITA para desviar da chuva.</p>
-    </div>
+<div id="score">Pontos: <span id="points">0</span></div>
+<canvas id="game" width="600" height="600"></canvas>
+
+<div id="gameOver">
+    <h1>Game Over ☠️</h1>
+    <p>Pontos: <span id="finalScore">0</span></p>
+    <button onclick="restart()">Jogar Novamente</button>
+</div>
+
+<script>
+// =============== CONFIGURAÇÃO ===============
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreElement = document.getElementById("points");
+const gameOverScreen = document.getElementById("gameOver");
+const finalScoreElement = document.getElementById("finalScore");
+
+let player = { x: 280, y: 500, width: 40, height: 60, speed: 8 };
+let rain = [];
+let lightning = [];
+let score = 0;
+let gameRunning = true;
+let thunderTimer = 0;
+let difficulty = 1;
+
+// =============== CONTROLES ===============
+const keys = {};
+window.addEventListener("keydown", e => keys[e.key] = true);
+window.addEventListener("keyup", e => keys[e.key] = false);
+
+// =============== FUNÇÕES ===============
+function spawnRain() {
+    rain.push({
+        x: Math.random() * canvas.width,
+        y: -10,
+        length: 15 + Math.random() * 15,
+        speed: 8 + Math.random() * 7
+    });
+}
+
+function spawnLightning() {
+    lightning.push({
+        x: Math.random() * (canvas.width - 40),
+        y: -100,
+        width: 40,
+        height: 600,
+        life: 25, // frames visível
+        flash: true
+    });
+}
+
+function drawBackground() {
+    // Céu escuro com chuva
+    ctx.fillStyle = "#1a1a2e";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    // Nuvens
+    ctx.fillStyle = "#333355";
+    ctx.fillRect(50, 80, 200, 60);
+    ctx.fillRect(350, 50, 180, 70);
+}
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+// Desenhar jogador (pessoa simples)
+function drawPlayer() {
+    ctx.fillStyle = "#4ade80";
+    ctx.fillRect(player.x, player.y, player.width, player.height); // corpo
+    
+    // cabeça
+    ctx.fillStyle = "#facc15";
+    ctx.beginPath();
+    ctx.arc(player.x + 20, player.y + 15, 12, 0, Math.PI * 2);
+    ctx.fill();
+}
 
-        // Variáveis do Jogo
-        let score = 0;
-        let gameOver = false;
-        let frameCount = 0;
-        let isThundering = false;
-        let thunderFlash = 0;
+// Desenhar chuva
+function drawRain() {
+    ctx.strokeStyle = "#60a5fa";
+    ctx.lineWidth = 2;
+    for (let drop of rain) {
+        ctx.beginPath();
+        ctx.moveTo(drop.x, drop.y);
+        ctx.lineTo(drop.x, drop.y + drop.length);
+        ctx.stroke();
+    }
+}
 
-        // Jogador
-        const player = {
-            x: 175,
-            y: 530,
-            width: 30,
-            height: 30,
-            speed: 5,
-            dx: 0
-        };
-
-        // Arrays de obstáculos
-        let raindrops = [];
-        let lightnings = [];
-
-        // Controles
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft') player.dx = -player.speed;
-            if (e.key === 'ArrowRight') player.dx = player.speed;
-            if (e.key === 'Enter' && gameOver) resetGame();
-        });
-
-        document.addEventListener('keyup', (e) => {
-            if (e.key === 'ArrowLeft' && player.dx < 0) player.dx = 0;
-            if (e.key === 'ArrowRight' && player.dx > 0) player.dx = 0;
-        });
-
-        // Função para criar chuva
-        function createRaindrop() {
-            let speedMultiplier = isThundering ? 1.5 : 1;
-            raindrops.push({
-                x: Math.random() * (canvas.width - 5),
-                y: -10,
-                width: 4,
-                height: 15,
-                speed: (Math.random() * 3 + 3) * speedMultiplier
-            });
-        }
-
-        // Função para criar um raio que cai (obstáculo perigoso)
-        function createLightningObstacle() {
-            lightnings.push({
-                x: Math.random() * (canvas.width - 20),
-                y: -50,
-                width: 20,
-                height: 80,
-                speed: 10
-            });
-        }
-
-        // Função de detecção de colisão
-        function checkCollision(rect1, rect2) {
-            return rect1.x < rect2.x + rect2.width &&
-                   rect1.x + rect1.width > rect2.x &&
-                   rect1.y < rect2.y + rect2.height &&
-                   rect1.y + rect1.height > rect2.y;
-        }
-
-        function resetGame() {
-            score = 0;
-            gameOver = false;
-            raindrops = [];
-            lightnings = [];
-            player.x = 175;
-            frameCount = 0;
-            isThundering = false;
-            update();
-        }
-
-        function update() {
-            if (gameOver) return;
-
-            frameCount++;
-            score += 1;
-
-            // Fase da Tempestade (Trovões começam após a pontuação 1500)
-            if (score > 1500) {
-                isThundering = true;
-            }
-
-            // Movimento do jogador
-            player.x += player.dx;
+// Desenhar trovão / raio
+function drawLightning() {
+    for (let bolt of lightning) {
+        if (bolt.flash) {
+            ctx.fillStyle = "rgba(255, 255, 200, 0.9)";
+            ctx.fillRect(bolt.x, 0, bolt.width, canvas.height);
             
-            // Limites da tela
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+            // brilho extra
+            ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+            ctx.fillRect(bolt.x - 15, 0, bolt.width + 30, canvas.height);
+        }
+    }
+}
 
-            // Adicionar chuva
-            let rainFrequency = isThundering ? 10 : 20;
-            if (frameCount % rainFrequency === 0) {
-                createRaindrop();
+function update() {
+    if (!gameRunning) return;
+
+    // Movimento do jogador
+    if (keys["ArrowLeft"] || keys["a"] || keys["A"]) player.x -= player.speed;
+    if (keys["ArrowRight"] || keys["d"] || keys["D"]) player.x += player.speed;
+
+    // Limites da tela
+    if (player.x < 0) player.x = 0;
+    if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+    // Chuva
+    for (let i = rain.length - 1; i >= 0; i--) {
+        rain[i].y += rain[i].speed;
+        if (rain[i].y > canvas.height) rain.splice(i, 1);
+    }
+
+    // Trovões (ficam mais frequentes com o tempo)
+    thunderTimer++;
+    if (thunderTimer > 90 - difficulty * 10) {
+        if (Math.random() < 0.4) spawnLightning();
+        thunderTimer = 0;
+    }
+
+    // Atualizar trovões
+    for (let i = lightning.length - 1; i >= 0; i--) {
+        lightning[i].life--;
+        if (lightning[i].life <= 0) lightning.splice(i, 1);
+    }
+
+    // Colisão com trovão
+    for (let bolt of lightning) {
+        if (bolt.life > 10) { // só colide enquanto está brilhando forte
+            if (
+                player.x < bolt.x + bolt.width &&
+                player.x + player.width > bolt.x &&
+                player.y < bolt.y + bolt.height &&
+                player.y + player.height > bolt.y
+            ) {
+                gameOver();
             }
+        }
+    }
 
-            // Efeitos de Trovão e Raios
-            if (isThundering) {
-                if (Math.random() < 0.005) { // Chance de um clarão de trovão
-                    thunderFlash = 5; // Duração do clarão
-                    if (Math.random() < 0.5) {
-                        createLightningObstacle(); // Cria um raio mortal que cai rápido
-                    }
-                }
+    // Aumentar dificuldade
+    if (score % 300 === 0 && score > 0) difficulty += 0.3;
+
+    score++;
+    scoreElement.textContent = score;
+}
+
+function gameLoop() {
+    drawBackground();
+    drawRain();
+    drawLightning();
+    drawPlayer();
+    update();
+
+    // Spawn chuva constante
+    if (Math.random() < 0.7) spawnRain();
+    if (Math.random() < 0.4) spawnRain(); // mais chuva
+
+    requestAnimationFrame(gameLoop);
+}
+
+function gameOver() {
+    gameRunning = false;
+    finalScoreElement.textContent = score;
+    gameOverScreen.style.display = "block";
+}
+
+function restart() {
+    rain = [];
+    lightning = [];
+    player.x = 280;
+    score = 0;
+    difficulty = 1;
+    thunderTimer = 0;
+    gameRunning = true;
+    gameOverScreen.style.display = "none";
+    scoreElement.textContent = "0";
+}
+
+// Iniciar jogo
+spawnRain();
+gameLoop();
+</script>
+
+</body>
+</html>
